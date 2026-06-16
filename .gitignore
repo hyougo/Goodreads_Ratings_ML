@@ -9,7 +9,7 @@ __pycache__/
 dist/
 build/
 *.egg
-
+src/
 # --- Virtual environments ---
 .venv/
 venv/
@@ -58,3 +58,6 @@ wandb/
 # --- documents ---
 docs/other/
 
+logs/
+docs/plans/
+data/external/
