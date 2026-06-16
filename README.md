@@ -16,9 +16,20 @@ Dependencies are listed in `requirements.txt`.
 
 ### 1) Clone the repository
 
+From the directory where you want the project folder to live (for example, your `Projects` folder):
+
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/hyougo/Goodreads_Ratings_ML.git
 cd Goodreads_Ratings_ML
+```
+
+This creates a `Goodreads_Ratings_ML` folder and checks out the repository inside it.
+
+To use a different folder name:
+
+```bash
+git clone https://github.com/hyougo/Goodreads_Ratings_ML.git my-folder-name
+cd my-folder-name
 ```
 
 ### 2) Create and activate a virtual environment
