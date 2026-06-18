@@ -61,3 +61,7 @@ docs/other/
 logs/
 docs/plans/
 data/external/
+
+#----Anaconda-----
+.virtual_documents/
+anaconda_projects/
