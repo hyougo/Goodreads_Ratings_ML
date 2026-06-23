@@ -1,0 +1,67 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+src/
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+notebooks/examples/
+
+# --- Environment & secrets  ---
+.env
+.env.*
+!.env.example
+
+# --- Testing / tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.cover
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# --- ML / notebooks outputs ---
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+checkpoints/
+mlruns/
+wandb/
+
+# --- Data  ---
+#data/raw/
+#data/processed/
+
+# --- documents ---
+docs/other/
+
+logs/
+docs/plans/
+data/external/
+
+#----Anaconda-----
+.virtual_documents/
+anaconda_projects/
