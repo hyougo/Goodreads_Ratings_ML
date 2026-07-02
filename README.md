@@ -48,7 +48,17 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4) Launch Jupyter
+### 4) Set up notebook git filter
+
+After activating the virtual environment, run once per clone:
+
+```bash
+nbstripout --install --attributes .gitattributes
+```
+
+This strips cell outputs and execution metadata from `.ipynb` files on commit, so git diffs only show source changes.
+
+### 5) Launch Jupyter
 
 ```bash
 jupyter notebook
