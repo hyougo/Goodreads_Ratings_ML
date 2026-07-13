@@ -63,6 +63,10 @@ docs/other/
 logs/
 docs/plans/
 data/external/
+data/processed/goodreads_extended_cleaned.db
+data/processed/goodreads_extended_cleaned.db-*
+data/processed/goodreads_extended_cleaned.tmp.db
+data/processed/goodreads_extended_cleaned.tmp.db-*
 
 #----Anaconda-----
 .virtual_documents/
