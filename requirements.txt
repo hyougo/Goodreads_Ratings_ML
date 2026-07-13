@@ -15,3 +15,6 @@ nbstripout
 pathlib
 catboost
 xgboost
+cloudpickle
+
+pre-commit

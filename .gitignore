@@ -43,6 +43,8 @@ Thumbs.db
 
 # --- ML / notebooks outputs ---
 *.pkl
+!models/
+!models/*.pkl
 *.joblib
 *.h5
 *.pt
