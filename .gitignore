@@ -19,7 +19,7 @@ ENV/
 # --- Jupyter ---
 .ipynb_checkpoints/
 notebooks/examples/
-
+notebooks/bkups/
 # --- Environment & secrets  ---
 .env
 .env.*
