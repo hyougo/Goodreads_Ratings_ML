@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  searchEvents SearchEvent[]
+  bookViews    BookView[]
+  favorites    Favorite[]
+  predictions  Prediction[]
+}
+
+model Book {
+  id                String     @id @default(cuid())
+  bookID            Int?
+  title             String
+  authors           String
+  firstAuthor       String
+  averageRating     Float
+  isbn              String?
+  isbn13            String?
+  languageCode      String
+  numPages          Int
+  ratingsCount      Int
+  textReviewsCount  Int
+  publicationDate   String
+  publicationYear   Int?
+  publisher         String
+  createdAt         DateTime   @default(now())
+
+  bookViews  BookView[]
+  favorites  Favorite[]
+
+  @@index([firstAuthor])
+  @@index([languageCode])
+  @@index([averageRating])
+  @@index([ratingsCount])
+}
+
+model SearchEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  query     String
+  filters   String   @default("{}")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model BookView {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([bookId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([userId])
+}
+
+model Prediction {
+  id              String   @id @default(cuid())
+  userId          String?
+  title           String
+  authors         String
+  input           String
+  predictedRating Float
+  createdAt       DateTime @default(now())
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+}
