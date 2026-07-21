@@ -64,3 +64,29 @@ This strips cell outputs and execution metadata from `.ipynb` files on commit, s
 jupyter notebook
 ```
 
+## Web Application (BookWise)
+
+A web application that serves the trained model to users: enter a book's details to get its
+predicted rating, browse the book catalog with advanced search, and get personalized
+recommendations. The code lives in `webapp/` — a Python FastAPI model service, a Node/TypeScript
+API, and a React interface.
+
+Run the three services (each in its own terminal), then open <http://localhost:5173>:
+
+```bash
+# 1) Model service (port 8000)
+cd webapp/ml-service
+python -m venv .venv && .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m uvicorn app:app --port 8000
+
+# 2) API server (port 4000)
+cd webapp/server
+npm install && npx prisma db push && npm run seed && npm run dev
+
+# 3) Web interface (port 5173)
+cd webapp/client
+npm install && npm run dev
+```
+
+See `webapp/README.md` for full setup and details.

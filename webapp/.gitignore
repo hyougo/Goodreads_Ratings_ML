@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# python
+.venv/
+ml-service/.venv/
+__pycache__/
+*.pyc
+
+# builds
+dist/
+client/dist/
+server/dist/
+
+# database
+server/dev.db
+server/dev.db-journal
+server/prisma/dev.db
+
+# env (kept .env with dev defaults; ignore local overrides)
+.env.local
+*.env.local
+
+# misc
+.DS_Store
+*.log

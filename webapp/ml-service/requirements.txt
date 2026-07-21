@@ -1,0 +1,9 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+cloudpickle==3.1.2
+pandas>=2.3
+numpy>=2.0
+scikit-learn>=1.5
+xgboost>=2.1
+catboost>=1.2
