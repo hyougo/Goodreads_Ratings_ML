@@ -41,11 +41,13 @@ booksRouter.get("/", optionalAuth, async (req: AuthedRequest, res) => {
 
   const and: Prisma.BookWhereInput[] = [];
   if (p.q) {
+    // `insensitive` mode makes it match any substring (start / middle / end)
+    // regardless of case — Postgres `contains` is case-sensitive by default.
     and.push({
       OR: [
-        { title: { contains: p.q } },
-        { authors: { contains: p.q } },
-        { publisher: { contains: p.q } },
+        { title: { contains: p.q, mode: "insensitive" } },
+        { authors: { contains: p.q, mode: "insensitive" } },
+        { publisher: { contains: p.q, mode: "insensitive" } },
       ],
     });
   }

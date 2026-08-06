@@ -47,8 +47,14 @@
     @apply w-full rounded-xl border border-parchment-300 bg-white px-3.5 py-2.5 text-sm text-stone-800
       placeholder:text-stone-400 outline-none transition focus:border-forest-500 focus:ring-2 focus:ring-forest-500/25;
   }
+  .input-error {
+    @apply border-red-400 bg-red-50/40 focus:border-red-500 focus:ring-red-500/25;
+  }
   .label {
     @apply mb-1.5 block text-xs font-semibold uppercase tracking-wide text-stone-500;
+  }
+  .field-error {
+    @apply mt-1 flex items-center gap-1 text-xs font-medium text-red-600;
   }
   .chip {
     @apply inline-flex items-center gap-1 rounded-full border border-parchment-300 bg-parchment-100 px-3 py-1 text-xs font-medium text-forest-700;

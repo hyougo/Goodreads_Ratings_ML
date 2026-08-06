@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type PredictInput, type BatchPredictionRow } from "../api/client";
+import type { Book } from "../types";
 import { formatCount, ratingColor } from "../lib/format";
 import { StarRating } from "../components/StarRating";
 import { Icon } from "../components/Icon";
@@ -22,6 +23,23 @@ function yearFromDate(date: string): number {
   return m ? Number(m[1]) : 2010;
 }
 
+function coverSrc(isbn: string | null): string | null {
+  return isbn ? `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false` : null;
+}
+
+function bookToInput(b: Book): PredictInput {
+  return {
+    title: b.title,
+    authors: b.authors,
+    language_code: b.languageCode || "eng",
+    num_pages: b.numPages || 0,
+    ratings_count: b.ratingsCount || 0,
+    text_reviews_count: b.textReviewsCount || 0,
+    publication_date: b.publicationDate || "1/1/2015",
+    publisher: b.publisher || "",
+  };
+}
+
 /** Animated number that eases toward `target` (used for the big rating). */
 function useCountUp(target: number | null, duration = 550): number {
   const [display, setDisplay] = useState(target ?? 0);
@@ -42,6 +60,38 @@ function useCountUp(target: number | null, duration = 550): number {
     return () => cancelAnimationFrame(raf);
   }, [target, duration]);
   return display;
+}
+
+/** Cover image that hides itself if Open Library has no match. */
+function CoverImage({ isbn, className }: { isbn: string | null; className?: string }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [isbn]);
+  const src = coverSrc(isbn);
+  if (!src || failed) return null;
+  return (
+    <img
+      src={src}
+      alt="Book cover"
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className={className}
+    />
+  );
+}
+
+/** Inline validation message shown under an invalid field. */
+function FieldError({ msg }: { msg: string | null }) {
+  if (!msg) return null;
+  return (
+    <p className="field-error">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4" strokeLinecap="round" />
+        <path d="M12 16h.01" strokeLinecap="round" />
+      </svg>
+      {msg}
+    </p>
+  );
 }
 
 /** Minimal CSV parser that respects quoted fields (commas inside titles). */
@@ -120,9 +170,17 @@ const TEMPLATE_CSV =
 export function Predict() {
   const [form, setForm] = useState<PredictInput>(SAMPLE);
   const [result, setResult] = useState<number | null>(null);
+  const [coverIsbn, setCoverIsbn] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const debounce = useRef<number>();
+
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState<Book[]>([]);
+  const [openSuggest, setOpenSuggest] = useState(false);
+  const suggestDebounce = useRef<number>();
+  const typing = useRef(false); // true only while the user edits the title field
 
   const animated = useCountUp(result);
 
@@ -144,9 +202,80 @@ export function Predict() {
     return () => window.clearTimeout(debounce.current);
   }, [form, runPredict]);
 
+  // Title autocomplete: search the catalog while the user types.
+  useEffect(() => {
+    if (!typing.current) return;
+    const q = form.title.trim();
+    window.clearTimeout(suggestDebounce.current);
+    if (q.length < 2) {
+      setSuggestions([]);
+      setOpenSuggest(false);
+      return;
+    }
+    suggestDebounce.current = window.setTimeout(() => {
+      api
+        .searchBooks({ q, pageSize: 8, sort: "relevance" })
+        .then((r) => {
+          setSuggestions(r.items);
+          setOpenSuggest(r.items.length > 0);
+        })
+        .catch(() => {
+          setSuggestions([]);
+          setOpenSuggest(false);
+        });
+    }, 250);
+    return () => window.clearTimeout(suggestDebounce.current);
+  }, [form.title]);
+
   function set<K extends keyof PredictInput>(key: K, value: PredictInput[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
+
+  // Input constraints: which required fields are currently invalid.
+  function errorFor(key: keyof PredictInput): string | null {
+    switch (key) {
+      case "title":
+        return form.title.trim() ? null : "Title is required";
+      case "authors":
+        return form.authors.trim() ? null : "At least one author is required";
+      case "publication_date":
+        if (!form.publication_date.trim()) return "Publication date is required";
+        return /\d{4}/.test(form.publication_date) ? null : "Enter a valid date (M/D/YYYY)";
+      default:
+        return null;
+    }
+  }
+  // Only surface the error once the field has been touched (blurred).
+  const showError = (key: keyof PredictInput) => (touched[key] ? errorFor(key) : null);
+  const markTouched = (key: keyof PredictInput) => setTouched((t) => ({ ...t, [key]: true }));
+  const cx = (key: keyof PredictInput) => `input ${showError(key) ? "input-error" : ""}`;
+
+  // Fill the whole form from a picked catalog book (autocomplete).
+  function pickBook(b: Book) {
+    typing.current = false;
+    setOpenSuggest(false);
+    setSuggestions([]);
+    setCoverIsbn(b.isbn13 || b.isbn || null);
+    setForm(bookToInput(b));
+  }
+
+  // Fill the form from a CSV result row, and resolve its cover from the catalog.
+  const pickRow = useCallback((row: BatchPredictionRow) => {
+    typing.current = false;
+    setOpenSuggest(false);
+    const { predicted_rating, ...input } = row;
+    setForm(input);
+    setResult(predicted_rating);
+    setCoverIsbn(null);
+    api
+      .searchBooks({ q: row.title, pageSize: 1 })
+      .then((r) => {
+        const b = r.items[0];
+        setCoverIsbn(b ? b.isbn13 || b.isbn || null : null);
+      })
+      .catch(() => setCoverIsbn(null));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
@@ -154,32 +283,81 @@ export function Predict() {
         <span className="eyebrow">Rating estimator</span>
         <h1 className="section-title mt-4 text-4xl">Rating Predictor</h1>
         <p className="mx-auto mt-2 max-w-xl text-stone-500">
-          Enter a book's details — the estimate updates <strong>live</strong> as you type or drag the sliders.
+          Start typing a title to pick a real book, or enter details manually — the estimate updates <strong>live</strong>.
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         {/* form */}
-        <form onSubmit={(e) => { e.preventDefault(); runPredict(form); }} className="card space-y-4 p-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setTouched({ title: true, authors: true, publication_date: true });
+            runPredict(form);
+          }}
+          className="card space-y-4 p-6"
+        >
           <div className="flex items-center justify-between">
             <h2 className="font-display text-lg font-bold text-forest-800">Book attributes</h2>
             <button
               type="button"
               className="rounded-full border border-parchment-300 px-3 py-1 text-xs font-semibold text-forest-600 hover:bg-parchment-100"
-              onClick={() => setForm(SAMPLE)}
+              onClick={() => { typing.current = false; setForm(SAMPLE); setCoverIsbn(null); }}
             >
               Fill sample
             </button>
           </div>
 
-          <div>
-            <label className="label">Title</label>
-            <input className="input" value={form.title} onChange={(e) => set("title", e.target.value)} required />
+          <div className="relative">
+            <label className="label">
+              Title <span className="text-red-500">*</span>
+            </label>
+            <input
+              className={cx("title")}
+              value={form.title}
+              autoComplete="off"
+              aria-invalid={!!showError("title")}
+              placeholder="Start typing to search real books…"
+              onChange={(e) => { typing.current = true; set("title", e.target.value); }}
+              onFocus={() => { if (suggestions.length) setOpenSuggest(true); }}
+              onBlur={() => { markTouched("title"); window.setTimeout(() => setOpenSuggest(false), 150); }}
+              required
+            />
+            {openSuggest && suggestions.length > 0 && (
+              <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-parchment-200 bg-white shadow-lg">
+                {suggestions.map((b) => (
+                  <li key={b.id}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickBook(b)}
+                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-parchment-100"
+                    >
+                      <span className="truncate text-sm font-medium text-forest-800">{b.title}</span>
+                      <span className="ml-auto shrink-0 truncate text-xs text-stone-400">
+                        {b.firstAuthor || b.authors}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <FieldError msg={showError("title")} />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="label">Author(s)</label>
-              <input className="input" value={form.authors} onChange={(e) => set("authors", e.target.value)} required />
+              <label className="label">
+                Author(s) <span className="text-red-500">*</span>
+              </label>
+              <input
+                className={cx("authors")}
+                value={form.authors}
+                aria-invalid={!!showError("authors")}
+                onChange={(e) => set("authors", e.target.value)}
+                onBlur={() => markTouched("authors")}
+                required
+              />
+              <FieldError msg={showError("authors")} />
             </div>
             <div>
               <label className="label">Publisher</label>
@@ -196,13 +374,18 @@ export function Predict() {
               </select>
             </div>
             <div>
-              <label className="label">Publication date</label>
+              <label className="label">
+                Publication date <span className="text-red-500">*</span>
+              </label>
               <input
-                className="input"
+                className={cx("publication_date")}
                 placeholder="M/D/YYYY"
                 value={form.publication_date}
+                aria-invalid={!!showError("publication_date")}
                 onChange={(e) => set("publication_date", e.target.value)}
+                onBlur={() => markTouched("publication_date")}
               />
+              <FieldError msg={showError("publication_date")} />
             </div>
           </div>
 
@@ -248,6 +431,10 @@ export function Predict() {
             </div>
           ) : (
             <div className="space-y-3">
+              <CoverImage
+                isbn={coverIsbn}
+                className="mx-auto mb-1 h-28 w-auto rounded-lg shadow-sm ring-1 ring-black/5"
+              />
               <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Predicted rating {loading && <span className="h-2 w-2 animate-ping rounded-full bg-forest-400" />}
               </div>
@@ -267,7 +454,7 @@ export function Predict() {
         </div>
       </div>
 
-      <BatchPredict />
+      <BatchPredict onPickRow={pickRow} />
     </div>
   );
 }
@@ -297,16 +484,16 @@ function Slider(props: {
 
 /* ---- CSV batch prediction ------------------------------------------------ */
 
-function BatchPredict() {
+function BatchPredict({ onPickRow }: { onPickRow: (row: BatchPredictionRow) => void }) {
   const [rows, setRows] = useState<BatchPredictionRow[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleFile(file: File) {
     setBusy(true);
-    setStatus(null);
+    setError(null);
     setRows([]);
     try {
       const text = await file.text();
@@ -315,9 +502,8 @@ function BatchPredict() {
       if (parsed.length > 2000) throw new Error(`Too many rows (${parsed.length}). Max is 2000.`);
       const res = await api.predictBatch(parsed);
       setRows(res.predictions);
-      setStatus(`Scored ${res.count} book${res.count > 1 ? "s" : ""} with ${res.model_name ?? "the model"}.`);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Batch prediction failed.");
+      setError(err instanceof Error ? err.message : "Batch prediction failed.");
     } finally {
       setBusy(false);
     }
@@ -370,12 +556,14 @@ function BatchPredict() {
         />
       </div>
 
-      {status && <p className="text-sm text-stone-600">{status}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
 
       {rows.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-forest-700">{rows.length} results</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-forest-700">
+              {rows.length} results — <span className="font-normal text-stone-500">click a row to load it above</span>
+            </span>
             <button
               type="button"
               className="btn-primary px-4 py-1.5 text-sm"
@@ -396,8 +584,13 @@ function BatchPredict() {
               </thead>
               <tbody>
                 {rows.slice(0, 200).map((r, i) => (
-                  <tr key={i} className="border-t border-parchment-200">
-                    <td className="max-w-xs truncate px-3 py-2 text-stone-700">{r.title}</td>
+                  <tr
+                    key={i}
+                    onClick={() => onPickRow(r)}
+                    title="Load this book into the form above"
+                    className="cursor-pointer border-t border-parchment-200 transition-colors hover:bg-forest-50"
+                  >
+                    <td className="max-w-xs truncate px-3 py-2 font-medium text-forest-700">{r.title}</td>
                     <td className="max-w-[10rem] truncate px-3 py-2 text-stone-500">{r.authors}</td>
                     <td className={`px-3 py-2 text-right font-bold tabular-nums ${ratingColor(r.predicted_rating)}`}>
                       {r.predicted_rating.toFixed(2)}
