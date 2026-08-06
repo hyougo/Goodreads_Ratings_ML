@@ -32,18 +32,37 @@ export function Profile() {
 
   if (!user) return null;
 
-  // Hide "filters only" searches (no query text).
-  const visibleSearches = (history?.searches ?? []).filter((s) => s.query.trim() !== "");
+  // Clean up "Recent searches": drop empties and placeholder junk, de-duplicate
+  // case-insensitively, and collapse typing prefixes (keep "The Name of the Wind"
+  // but hide the "The Name", "The Name of the Win" it was typed through).
+  const JUNK = new Set(["untitled", "unknown"]);
+  const visibleSearches = (() => {
+    const kept: { id: string; query: string }[] = [];
+    const seen = new Set<string>();
+    for (const s of history?.searches ?? []) {
+      const q = s.query.trim();
+      const lc = q.toLowerCase();
+      if (!q || JUNK.has(lc) || seen.has(lc)) continue;
+      // Skip if it's just a prefix of a longer query we've already kept.
+      if (kept.some((k) => k.query.toLowerCase().startsWith(lc) && k.query.length > q.length)) continue;
+      seen.add(lc);
+      kept.push({ id: s.id, query: q });
+    }
+    return kept;
+  })();
 
-  // Show each book only once — keep the most recent prediction per title + author.
-  const uniquePredictions = predictions.filter((p, i) => {
-    const key = `${p.title.trim().toLowerCase()}|${p.authors.trim().toLowerCase()}`;
-    return (
-      predictions.findIndex(
-        (q) => `${q.title.trim().toLowerCase()}|${q.authors.trim().toLowerCase()}` === key,
-      ) === i
-    );
-  });
+  // Show each book only once — keep the most recent prediction per title + author,
+  // and hide placeholder rows from earlier CSV / typing tests.
+  const uniquePredictions = predictions
+    .filter((p) => !JUNK.has(p.title.trim().toLowerCase()))
+    .filter((p, i, arr) => {
+      const key = `${p.title.trim().toLowerCase()}|${p.authors.trim().toLowerCase()}`;
+      return (
+        arr.findIndex(
+          (q) => `${q.title.trim().toLowerCase()}|${q.authors.trim().toLowerCase()}` === key,
+        ) === i
+      );
+    });
 
   return (
     <div className="space-y-10">

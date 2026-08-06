@@ -91,8 +91,11 @@ export const api = {
       views: { id: string; book: Book; at: string }[];
     }>("/recommendations/history"),
 
-  predict: (data: PredictInput) =>
-    request<PredictionResult>("/predict", { method: "POST", body: JSON.stringify(data) }),
+  predict: (data: PredictInput, persist = false) =>
+    request<PredictionResult>("/predict", {
+      method: "POST",
+      body: JSON.stringify({ ...data, persist }),
+    }),
   predictBatch: (items: PredictInput[]) =>
     request<{ predictions: BatchPredictionRow[]; count: number; model_name?: string }>(
       "/predict/batch",

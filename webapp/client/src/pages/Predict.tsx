@@ -174,6 +174,7 @@ export function Predict() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [saved, setSaved] = useState(false);
   const debounce = useRef<number>();
 
   // Autocomplete state
@@ -214,10 +215,13 @@ export function Predict() {
     }
     suggestDebounce.current = window.setTimeout(() => {
       api
-        .searchBooks({ q, pageSize: 8, sort: "relevance" })
+        .searchBooks({ q, pageSize: 8, sort: "relevance", track: 0 })
         .then((r) => {
           setSuggestions(r.items);
           setOpenSuggest(r.items.length > 0);
+          // Reuse these results for the cover so typing doesn't fire a 2nd search.
+          const match = r.items.find((b) => b.isbn13 || b.isbn);
+          if (match) setCoverIsbn(match.isbn13 || match.isbn || null);
         })
         .catch(() => {
           setSuggestions([]);
@@ -225,6 +229,28 @@ export function Predict() {
         });
     }, 250);
     return () => window.clearTimeout(suggestDebounce.current);
+  }, [form.title]);
+
+  // Resolve a real cover image for whatever book is currently in the form —
+  // works for the sample, manual typing, autocomplete picks and CSV rows alike.
+  useEffect(() => {
+    if (typing.current) return; // while typing, the autocomplete search sets the cover
+    const title = form.title.trim();
+    if (!title) {
+      setCoverIsbn(null);
+      return;
+    }
+    const q = title.split(/[(:]/)[0].trim() || title; // drop "(series)" / subtitle
+    const handle = window.setTimeout(() => {
+      api
+        .searchBooks({ q, pageSize: 5, sort: "relevance", track: 0 })
+        .then((r) => {
+          const match = r.items.find((b) => b.isbn13 || b.isbn);
+          setCoverIsbn(match ? match.isbn13 || match.isbn || null : null);
+        })
+        .catch(() => undefined);
+    }, 400);
+    return () => window.clearTimeout(handle);
   }, [form.title]);
 
   function set<K extends keyof PredictInput>(key: K, value: PredictInput[K]) {
@@ -255,27 +281,34 @@ export function Predict() {
     typing.current = false;
     setOpenSuggest(false);
     setSuggestions([]);
-    setCoverIsbn(b.isbn13 || b.isbn || null);
+    setCoverIsbn(b.isbn13 || b.isbn || null); // instant; the effect refines it
     setForm(bookToInput(b));
   }
 
-  // Fill the form from a CSV result row, and resolve its cover from the catalog.
+  // Fill the form from a CSV result row (the cover effect resolves its image).
   const pickRow = useCallback((row: BatchPredictionRow) => {
     typing.current = false;
     setOpenSuggest(false);
     const { predicted_rating, ...input } = row;
     setForm(input);
     setResult(predicted_rating);
-    setCoverIsbn(null);
-    api
-      .searchBooks({ q: row.title, pageSize: 1 })
-      .then((r) => {
-        const b = r.items[0];
-        setCoverIsbn(b ? b.isbn13 || b.isbn || null : null);
-      })
-      .catch(() => setCoverIsbn(null));
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
+
+  // Deliberately save the current prediction to the user's history.
+  function savePrediction() {
+    if (errorFor("title") || errorFor("authors") || errorFor("publication_date")) {
+      setTouched({ title: true, authors: true, publication_date: true });
+      return;
+    }
+    api
+      .predict(form, true)
+      .then(() => {
+        setSaved(true);
+        window.setTimeout(() => setSaved(false), 2500);
+      })
+      .catch(() => undefined);
+  }
 
   return (
     <div className="mx-auto max-w-5xl space-y-10">
@@ -324,7 +357,7 @@ export function Predict() {
               required
             />
             {openSuggest && suggestions.length > 0 && (
-              <ul className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-parchment-200 bg-white shadow-lg">
+              <ul className="animate-drop-in absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-parchment-200 bg-white shadow-lg">
                 {suggestions.map((b) => (
                   <li key={b.id}>
                     <button
@@ -424,31 +457,51 @@ export function Predict() {
         <div className="card flex flex-col items-center justify-center gap-4 p-8 text-center lg:sticky lg:top-24 lg:self-start">
           {result === null ? (
             <div className="flex flex-col items-center text-stone-400">
-              <span className="mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-parchment-100 text-forest-400">
+              <span className="animate-float mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-parchment-100 text-forest-400">
                 <Icon name="gauge" size={30} />
               </span>
               <p className="text-sm">Add a title & author to see a live prediction.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              <CoverImage
-                isbn={coverIsbn}
-                className="mx-auto mb-1 h-28 w-auto rounded-lg shadow-sm ring-1 ring-black/5"
-              />
+              {coverIsbn && (
+                <div className="animate-float">
+                  <CoverImage
+                    key={coverIsbn}
+                    isbn={coverIsbn}
+                    className="animate-cover-in mx-auto mb-1 h-32 w-auto rounded-lg shadow-md ring-1 ring-black/5"
+                  />
+                </div>
+              )}
               <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Predicted rating {loading && <span className="h-2 w-2 animate-ping rounded-full bg-forest-400" />}
               </div>
-              <div className={`font-display text-6xl font-bold tabular-nums ${ratingColor(animated)}`}>
+              <div
+                key={result}
+                className={`animate-pop-in font-display text-6xl font-bold tabular-nums ${ratingColor(animated)}`}
+              >
                 {animated.toFixed(2)}
               </div>
               <StarRating value={animated} size={26} />
               <div className="mx-auto mt-2 h-2.5 w-48 overflow-hidden rounded-full bg-parchment-200">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-orange-400 via-gold-400 to-forest-500 transition-all duration-300"
+                  className="shimmer-bar h-full rounded-full transition-all duration-500"
                   style={{ width: `${(animated / 5) * 100}%` }}
                 />
               </div>
               <p className="pt-1 text-xs text-stone-400">Updates live as you edit the inputs.</p>
+              <button
+                type="button"
+                onClick={savePrediction}
+                disabled={saved}
+                className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition ${
+                  saved
+                    ? "animate-pop-in bg-forest-100 text-forest-700"
+                    : "bg-forest-700 text-white hover:-translate-y-0.5 hover:bg-forest-800 hover:shadow-glow"
+                }`}
+              >
+                {saved ? "✓ Saved to history" : "Save to history"}
+              </button>
             </div>
           )}
         </div>

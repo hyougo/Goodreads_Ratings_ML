@@ -73,7 +73,9 @@ booksRouter.get("/", optionalAuth, async (req: AuthedRequest, res) => {
   ]);
 
   // Record the search for logged-in users so recommendations can learn from it.
-  if (req.user && (p.q || p.language || p.minRating !== undefined)) {
+  // `track=0` marks internal lookups (Predict autocomplete / cover resolution)
+  // that should never appear in the user's "Recent searches".
+  if (req.user && req.query.track !== "0" && (p.q || p.language || p.minRating !== undefined)) {
     prisma.searchEvent
       .create({
         data: {

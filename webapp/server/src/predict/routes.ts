@@ -43,17 +43,21 @@ predictRouter.post("/", optionalAuth, async (req: AuthedRequest, res) => {
       .json({ error: "The prediction service is unavailable. Make sure the ML service is running." });
   }
 
-  prisma.prediction
-    .create({
-      data: {
-        userId: req.user?.sub ?? null,
-        title: payload.title,
-        authors: payload.authors,
-        input: JSON.stringify(payload),
-        predictedRating: mlResult.predicted_rating,
-      },
-    })
-    .catch(() => undefined);
+  // Only record deliberate saves — the Predict page previews live on every
+  // keystroke, and we don't want those trial values polluting the history.
+  if (req.body?.persist === true) {
+    prisma.prediction
+      .create({
+        data: {
+          userId: req.user?.sub ?? null,
+          title: payload.title,
+          authors: payload.authors,
+          input: JSON.stringify(payload),
+          predictedRating: mlResult.predicted_rating,
+        },
+      })
+      .catch(() => undefined);
+  }
 
   return res.json({
     predictedRating: mlResult.predicted_rating,
