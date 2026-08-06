@@ -1,15 +1,17 @@
-import { Link } from "react-router-dom";
 import type { Book } from "../types";
 import { formatCount, ratingColor } from "../lib/format";
 import { StarRating } from "./StarRating";
 import { BookCover } from "./BookCover";
+import { useQuickView } from "../context/QuickView";
 
 export function BookCard({ book }: { book: Book }) {
+  const { open } = useQuickView();
   return (
-    <Link
-      to={`/book/${book.id}`}
-      className="book-card card group relative flex flex-col overflow-hidden text-left transition duration-300 hover:z-10 hover:border-forest-300 hover:shadow-card focus:z-10 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:ring-offset-2"
-      aria-label={`Open details for ${book.title}`}
+    <button
+      type="button"
+      onClick={() => open(book)}
+      className="book-card card group relative flex w-full flex-col overflow-hidden text-left transition duration-300 hover:z-10 hover:border-forest-300 hover:shadow-card focus:z-10 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:ring-offset-2"
+      aria-label={`Quick view: ${book.title}`}
     >
       <div className="relative overflow-hidden">
         <BookCover book={book} className="h-52 w-full" initialsSize={44} />
@@ -41,6 +43,6 @@ export function BookCard({ book }: { book: Book }) {
           <span className="text-[11px] text-stone-400">{formatCount(book.ratingsCount)} ratings</span>
         </div>
       </div>
-    </Link>
+    </button>
   );
 }
