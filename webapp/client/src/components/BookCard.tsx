@@ -1,17 +1,26 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
 import type { Book } from "../types";
 import { formatCount, ratingColor } from "../lib/format";
 import { StarRating } from "./StarRating";
 import { BookCover } from "./BookCover";
+import { BookQuickView } from "./BookQuickView";
 
 export function BookCard({ book }: { book: Book }) {
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
+
   return (
-    <Link
-      to={`/book/${book.id}`}
-      className="card group flex flex-col overflow-hidden transition duration-300 hover:-translate-y-1 hover:border-forest-300 hover:shadow-card"
-    >
-      <div className="relative">
+    <>
+      <button
+        type="button"
+        onClick={() => setIsQuickViewOpen(true)}
+        className="book-card card group relative flex w-full flex-col overflow-hidden text-left transition duration-300 hover:z-10 hover:border-forest-300 hover:shadow-card focus:z-10 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:ring-offset-2"
+        aria-label={`Open details for ${book.title}`}
+      >
+      <div className="relative overflow-hidden">
         <BookCover book={book} className="h-52 w-full" initialsSize={44} />
+        <div className="book-card-hint absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center bg-gradient-to-t from-forest-900/85 to-transparent px-3 pb-4 pt-10 text-sm font-semibold text-white">
+          Quick view
+        </div>
         <span className="absolute right-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-forest-700 shadow-sm backdrop-blur">
           {book.languageCode}
         </span>
@@ -36,6 +45,8 @@ export function BookCard({ book }: { book: Book }) {
           <span className="text-[11px] text-stone-400">{formatCount(book.ratingsCount)} ratings</span>
         </div>
       </div>
-    </Link>
+      </button>
+      {isQuickViewOpen && <BookQuickView book={book} onClose={() => setIsQuickViewOpen(false)} />}
+    </>
   );
 }

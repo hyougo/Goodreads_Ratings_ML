@@ -105,4 +105,8 @@ export const api = {
     request<{ items: { id: string; title: string; authors: string; predictedRating: number; createdAt: string }[] }>(
       "/predict/history",
     ),
+  deletePrediction: (id: string) =>
+    request<{ ok: boolean }>(`/predict/history/${id}`, { method: "DELETE" }),
+  clearPredictionHistory: () =>
+    request<{ ok: boolean }>("/predict/history", { method: "DELETE" }),
 };

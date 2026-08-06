@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type PredictInput, type BatchPredictionRow } from "../api/client";
 import type { Book } from "../types";
-import { formatCount, ratingColor } from "../lib/format";
+import { formatCount, ratingColor, coverUrl, coverGradient } from "../lib/format";
 import { StarRating } from "../components/StarRating";
 import { Icon } from "../components/Icon";
 
@@ -23,9 +23,6 @@ function yearFromDate(date: string): number {
   return m ? Number(m[1]) : 2010;
 }
 
-function coverSrc(isbn: string | null): string | null {
-  return isbn ? `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false` : null;
-}
 
 function bookToInput(b: Book): PredictInput {
   return {
@@ -62,20 +59,32 @@ function useCountUp(target: number | null, duration = 550): number {
   return display;
 }
 
-/** Cover image that hides itself if Open Library has no match. */
-function CoverImage({ isbn, className }: { isbn: string | null; className?: string }) {
+type CoverBook = Pick<Book, "title" | "isbn" | "isbn13">;
+
+/** Book cover — shows the real Open Library image, or a titled gradient tile if
+    that book has no cover, so something is always visible (like the catalog). */
+function CoverCard({ book }: { book: CoverBook }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [isbn]);
-  const src = coverSrc(isbn);
-  if (!src || failed) return null;
+  const src = coverUrl(book, "M");
   return (
-    <img
-      src={src}
-      alt="Book cover"
-      loading="lazy"
-      onError={() => setFailed(true)}
-      className={className}
-    />
+    <div className="animate-cover-in mx-auto mb-1 aspect-[2/3] w-24 overflow-hidden rounded-lg shadow-md ring-1 ring-black/5 sm:w-28">
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={book.title}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div
+          className="flex h-full w-full items-center justify-center p-2 text-center text-[11px] font-semibold leading-tight text-white"
+          style={{ background: coverGradient(book.title) }}
+        >
+          {book.title.slice(0, 40)}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -170,7 +179,7 @@ const TEMPLATE_CSV =
 export function Predict() {
   const [form, setForm] = useState<PredictInput>(SAMPLE);
   const [result, setResult] = useState<number | null>(null);
-  const [coverIsbn, setCoverIsbn] = useState<string | null>(null);
+  const [coverBook, setCoverBook] = useState<CoverBook | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -220,8 +229,8 @@ export function Predict() {
           setSuggestions(r.items);
           setOpenSuggest(r.items.length > 0);
           // Reuse these results for the cover so typing doesn't fire a 2nd search.
-          const match = r.items.find((b) => b.isbn13 || b.isbn);
-          if (match) setCoverIsbn(match.isbn13 || match.isbn || null);
+          const match = r.items.find((b) => b.isbn13 || b.isbn) ?? r.items[0];
+          if (match) setCoverBook(match);
         })
         .catch(() => {
           setSuggestions([]);
@@ -237,7 +246,7 @@ export function Predict() {
     if (typing.current) return; // while typing, the autocomplete search sets the cover
     const title = form.title.trim();
     if (!title) {
-      setCoverIsbn(null);
+      setCoverBook(null);
       return;
     }
     const q = title.split(/[(:]/)[0].trim() || title; // drop "(series)" / subtitle
@@ -245,8 +254,8 @@ export function Predict() {
       api
         .searchBooks({ q, pageSize: 5, sort: "relevance", track: 0 })
         .then((r) => {
-          const match = r.items.find((b) => b.isbn13 || b.isbn);
-          setCoverIsbn(match ? match.isbn13 || match.isbn || null : null);
+          const match = r.items.find((b) => b.isbn13 || b.isbn) ?? r.items[0];
+          setCoverBook(match ?? null);
         })
         .catch(() => undefined);
     }, 400);
@@ -281,7 +290,7 @@ export function Predict() {
     typing.current = false;
     setOpenSuggest(false);
     setSuggestions([]);
-    setCoverIsbn(b.isbn13 || b.isbn || null); // instant; the effect refines it
+    setCoverBook(b); // instant; the effect refines it
     setForm(bookToInput(b));
   }
 
@@ -335,7 +344,7 @@ export function Predict() {
             <button
               type="button"
               className="rounded-full border border-parchment-300 px-3 py-1 text-xs font-semibold text-forest-600 hover:bg-parchment-100"
-              onClick={() => { typing.current = false; setForm(SAMPLE); setCoverIsbn(null); }}
+              onClick={() => { typing.current = false; setForm(SAMPLE); setCoverBook(null); }}
             >
               Fill sample
             </button>
@@ -464,13 +473,9 @@ export function Predict() {
             </div>
           ) : (
             <div className="space-y-3">
-              {coverIsbn && (
+              {coverBook && (
                 <div className="animate-float">
-                  <CoverImage
-                    key={coverIsbn}
-                    isbn={coverIsbn}
-                    className="animate-cover-in mx-auto mb-1 h-32 w-auto rounded-lg shadow-md ring-1 ring-black/5"
-                  />
+                  <CoverCard key={coverBook.isbn13 || coverBook.isbn || coverBook.title} book={coverBook} />
                 </div>
               )}
               <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-500">

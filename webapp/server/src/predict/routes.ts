@@ -104,3 +104,17 @@ predictRouter.get("/history", requireAuth, async (req: AuthedRequest, res) => {
   });
   return res.json({ items: predictions });
 });
+
+/** Delete a single prediction (scoped to the owner). */
+predictRouter.delete("/history/:id", requireAuth, async (req: AuthedRequest, res) => {
+  await prisma.prediction.deleteMany({
+    where: { id: req.params.id, userId: req.user!.sub },
+  });
+  return res.json({ ok: true });
+});
+
+/** Clear the whole prediction history for the current user. */
+predictRouter.delete("/history", requireAuth, async (req: AuthedRequest, res) => {
+  await prisma.prediction.deleteMany({ where: { userId: req.user!.sub } });
+  return res.json({ ok: true });
+});

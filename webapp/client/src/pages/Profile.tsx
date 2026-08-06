@@ -64,6 +64,20 @@ export function Profile() {
       );
     });
 
+  const predKey = (p: PredRow) => `${p.title.trim().toLowerCase()}|${p.authors.trim().toLowerCase()}`;
+
+  // Remove every saved prediction for this title + author (not just the shown row).
+  async function removePrediction(row: PredRow) {
+    const ids = predictions.filter((p) => predKey(p) === predKey(row)).map((p) => p.id);
+    setPredictions((prev) => prev.filter((p) => !ids.includes(p.id)));
+    await Promise.all(ids.map((id) => api.deletePrediction(id).catch(() => undefined)));
+  }
+
+  async function clearPredictions() {
+    setPredictions([]);
+    await api.clearPredictionHistory().catch(() => undefined);
+  }
+
   return (
     <div className="space-y-10">
       <div className="card flex items-center gap-4 p-6">
@@ -91,17 +105,41 @@ export function Profile() {
         )}
       </Section>
 
-      <Section title="Prediction history">
+      <Section
+        title="Prediction history"
+        action={
+          uniquePredictions.length ? (
+            <button
+              onClick={clearPredictions}
+              className="text-xs font-semibold text-red-500 hover:text-red-600"
+            >
+              Clear all
+            </button>
+          ) : null
+        }
+      >
         {uniquePredictions.length ? (
           <div className="card divide-y divide-parchment-200">
             {uniquePredictions.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-4 px-4 py-3">
+              <div key={p.id} className="group flex items-center justify-between gap-4 px-4 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold text-forest-800">{p.title}</div>
                   <div className="truncate text-xs text-stone-400">{p.authors}</div>
                 </div>
-                <div className={`font-display text-xl font-bold ${ratingColor(p.predictedRating)}`}>
-                  {p.predictedRating.toFixed(2)}
+                <div className="flex items-center gap-3">
+                  <div className={`font-display text-xl font-bold ${ratingColor(p.predictedRating)}`}>
+                    {p.predictedRating.toFixed(2)}
+                  </div>
+                  <button
+                    onClick={() => removePrediction(p)}
+                    title="Remove from history"
+                    aria-label="Remove from history"
+                    className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-stone-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               </div>
             ))}
@@ -138,10 +176,21 @@ export function Profile() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section>
-      <h2 className="mb-4 font-display text-xl font-bold text-forest-800">{title}</h2>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h2 className="font-display text-xl font-bold text-forest-800">{title}</h2>
+        {action}
+      </div>
       {children}
     </section>
   );
