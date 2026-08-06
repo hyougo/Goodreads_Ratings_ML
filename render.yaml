@@ -50,7 +50,6 @@ services:
   - type: web
     name: bookwise-client
     runtime: static
-    plan: free
     rootDir: webapp/client
     buildCommand: npm install && npm run build
     staticPublishPath: dist
