@@ -7,6 +7,11 @@ import type {
   User,
 } from "../types";
 
+// In production the client is served from a different origin than the API, so we
+// prefix requests with VITE_API_URL (set at build time). Locally it stays empty
+// and requests go through the Vite dev proxy ("/api" -> localhost:4000).
+const API_BASE = (import.meta as { env?: Record<string, string | undefined> }).env?.VITE_API_URL ?? "";
+
 const TOKEN_KEY = "bookwise_token";
 
 export function getToken(): string | null {
@@ -27,7 +32,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, { ...options, headers });
+  const res = await fetch(`${API_BASE}/api${path}`, { ...options, headers });
   const isJson = res.headers.get("content-type")?.includes("application/json");
   const body = isJson ? await res.json() : null;
 
