@@ -1,26 +1,18 @@
-import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { Book } from "../types";
 import { formatCount, ratingColor } from "../lib/format";
 import { StarRating } from "./StarRating";
 import { BookCover } from "./BookCover";
-import { BookQuickView } from "./BookQuickView";
 
 export function BookCard({ book }: { book: Book }) {
-  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
-
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setIsQuickViewOpen(true)}
-        className="book-card card group relative flex w-full flex-col overflow-hidden text-left transition duration-300 hover:z-10 hover:border-forest-300 hover:shadow-card focus:z-10 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:ring-offset-2"
-        aria-label={`Open details for ${book.title}`}
-      >
+    <Link
+      to={`/book/${book.id}`}
+      className="book-card card group relative flex flex-col overflow-hidden text-left transition duration-300 hover:z-10 hover:border-forest-300 hover:shadow-card focus:z-10 focus:outline-none focus:ring-2 focus:ring-forest-500 focus:ring-offset-2"
+      aria-label={`Open details for ${book.title}`}
+    >
       <div className="relative overflow-hidden">
         <BookCover book={book} className="h-52 w-full" initialsSize={44} />
-        <div className="book-card-hint absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center bg-gradient-to-t from-forest-900/85 to-transparent px-3 pb-4 pt-10 text-sm font-semibold text-white">
-          Quick view
-        </div>
         <span className="absolute right-2 top-2 rounded-full bg-white/85 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-forest-700 shadow-sm backdrop-blur">
           {book.languageCode}
         </span>
@@ -35,6 +27,10 @@ export function BookCard({ book }: { book: Book }) {
           {book.title}
         </h3>
         <p className="line-clamp-1 text-xs text-stone-500">{book.firstAuthor}</p>
+        <div className="book-card-extra">
+          <p>{book.numPages} pages · {book.publicationYear || "Publication year unavailable"}</p>
+          <p>{formatCount(book.textReviewsCount)} reader reviews</p>
+        </div>
         <div className="mt-auto flex items-center justify-between pt-3">
           <div className="flex items-center gap-1.5">
             <StarRating value={book.averageRating} />
@@ -45,8 +41,6 @@ export function BookCard({ book }: { book: Book }) {
           <span className="text-[11px] text-stone-400">{formatCount(book.ratingsCount)} ratings</span>
         </div>
       </div>
-      </button>
-      {isQuickViewOpen && <BookQuickView book={book} onClose={() => setIsQuickViewOpen(false)} />}
-    </>
+    </Link>
   );
 }

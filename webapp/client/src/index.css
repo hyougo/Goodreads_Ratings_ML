@@ -25,25 +25,21 @@
 .book-card img {
   transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.book-card-hint {
-  transition: transform 260ms ease-out;
+.book-card-extra {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: theme(colors.stone.500);
+  transition: max-height 300ms ease, opacity 180ms ease, margin 300ms ease;
 }
-.book-card:hover .book-card-hint,
-.book-card:focus-visible .book-card-hint {
-  transform: translateY(0);
+.book-card:hover .book-card-extra,
+.book-card:focus-visible .book-card-extra {
+  max-height: 3rem;
+  margin-top: 0.5rem;
+  opacity: 1;
 }
-
-@keyframes quick-view-enter {
-  from { opacity: 0; transform: translateY(24px) scale(0.96); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-.quick-view-panel {
-  animation: quick-view-enter 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-.quick-view-cover {
-  animation: cover-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) 80ms both;
-}
-
 /* --- Predict page micro-animations --------------------------------------- */
 @keyframes pop-in {
   0% { transform: scale(0.7); opacity: 0; }
@@ -84,10 +80,10 @@
 
 /* Respect users who prefer reduced motion. */
 @media (prefers-reduced-motion: reduce) {
-  .animate-pop-in, .animate-cover-in, .animate-float, .animate-drop-in, .shimmer-bar, .quick-view-panel, .quick-view-cover {
+  .animate-pop-in, .animate-cover-in, .animate-float, .animate-drop-in, .shimmer-bar {
     animation: none;
   }
-  .book-card, .book-card img, .book-card-hint { transition: none; }
+  .book-card, .book-card img, .book-card-extra { transition: none; }
   .book-card:hover { transform: none; }
 }
 
