@@ -6,6 +6,50 @@ import { optionalAuth, requireAuth, type AuthedRequest } from "../auth/middlewar
 
 export const predictRouter = Router();
 
+// Friendly, HTML-free message shown when the model service can't be reached.
+const ML_UNAVAILABLE =
+  "The rating model is waking up (free hosting) — please try again in a few seconds.";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Call the Python ML service, riding out a cold start. Render's free tier spins
+ * the service down after ~15 min of inactivity, so the first request wakes it
+ * and gets a 502/503 HTML error page for ~30-60s. We keep retrying (up to a
+ * deadline) so the user just waits a little instead of seeing that raw HTML.
+ */
+async function callMlService(path: string, payload: unknown): Promise<Response | null> {
+  const deadline = Date.now() + 55_000; // total budget to wait out a cold start
+  let firstTry = true;
+  while (firstTry || Date.now() < deadline) {
+    firstTry = false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000); // per-attempt cap
+    try {
+      const response = await fetch(`${config.mlServiceUrl}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      // 502/503/504 = still waking up on the free tier — wait and retry.
+      if ((response.status === 502 || response.status === 503 || response.status === 504) && Date.now() < deadline) {
+        await sleep(3000);
+        continue;
+      }
+      return response;
+    } catch {
+      clearTimeout(timer);
+      if (Date.now() < deadline) {
+        await sleep(3000);
+        continue;
+      }
+    }
+  }
+  return null; // gave up — service is (still) unavailable
+}
+
 const predictSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
   authors: z.string().trim().min(1, "Author is required"),
@@ -25,22 +69,15 @@ predictRouter.post("/", optionalAuth, async (req: AuthedRequest, res) => {
   }
   const payload = parsed.data;
 
+  const response = await callMlService("/predict", payload);
+  if (!response || !response.ok) {
+    return res.status(503).json({ error: ML_UNAVAILABLE });
+  }
   let mlResult: { predicted_rating: number; model_name?: string };
   try {
-    const response = await fetch(`${config.mlServiceUrl}/predict`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      const detail = await response.text();
-      return res.status(502).json({ error: `Model service error: ${detail}` });
-    }
     mlResult = (await response.json()) as { predicted_rating: number; model_name?: string };
   } catch {
-    return res
-      .status(503)
-      .json({ error: "The prediction service is unavailable. Make sure the ML service is running." });
+    return res.status(503).json({ error: ML_UNAVAILABLE });
   }
 
   // Only record deliberate saves — the Predict page previews live on every
@@ -78,21 +115,14 @@ predictRouter.post("/batch", optionalAuth, async (req: AuthedRequest, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid input" });
   }
+  const response = await callMlService("/predict/batch", parsed.data);
+  if (!response || !response.ok) {
+    return res.status(503).json({ error: ML_UNAVAILABLE });
+  }
   try {
-    const response = await fetch(`${config.mlServiceUrl}/predict/batch`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(parsed.data),
-    });
-    if (!response.ok) {
-      const detail = await response.text();
-      return res.status(502).json({ error: `Model service error: ${detail}` });
-    }
     return res.json(await response.json());
   } catch {
-    return res
-      .status(503)
-      .json({ error: "The prediction service is unavailable. Make sure the ML service is running." });
+    return res.status(503).json({ error: ML_UNAVAILABLE });
   }
 });
 

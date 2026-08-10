@@ -88,32 +88,6 @@ function CoverCard({ book }: { book: CoverBook }) {
   );
 }
 
-// Normalize a title for comparison: lower-case, drop "(series)" and punctuation.
-function normalizeTitle(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/\(.*?\)/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-/**
- * Find a search result that genuinely matches the typed title — not just any
- * book that happens to contain the words. This stops an unrelated cover (e.g.
- * "It's Kind of a Funny Story" for a typed "Funny Story") from showing when the
- * book isn't actually in the dataset.
- */
-function matchCover(typedTitle: string, items: Book[]): Book | null {
-  const t = normalizeTitle(typedTitle);
-  if (!t) return null;
-  return (
-    items.find((b) => {
-      const c = normalizeTitle(b.title);
-      return c === t || c.startsWith(t);
-    }) ?? null
-  );
-}
-
 /** Inline validation message shown under an invalid field. */
 function FieldError({ msg }: { msg: string | null }) {
   if (!msg) return null;
@@ -272,8 +246,8 @@ export function Predict() {
           setSuggestions(r.items);
           setOpenSuggest(r.items.length > 0);
           // Reuse these results for the cover so typing doesn't fire a 2nd search.
-          // Only a genuine title match sets it — otherwise clear any stale cover.
-          setCoverBook(matchCover(q, r.items));
+          const match = r.items.find((b) => b.isbn13 || b.isbn) ?? r.items[0];
+          if (match) setCoverBook(match);
         })
         .catch(() => {
           setSuggestions([]);
@@ -296,7 +270,10 @@ export function Predict() {
     const handle = window.setTimeout(() => {
       api
         .searchBooks({ q, pageSize: 5, sort: "relevance", track: 0 })
-        .then((r) => setCoverBook(matchCover(title, r.items)))
+        .then((r) => {
+          const match = r.items.find((b) => b.isbn13 || b.isbn) ?? r.items[0];
+          setCoverBook(match ?? null);
+        })
         .catch(() => undefined);
     }, 400);
     return () => window.clearTimeout(handle);
@@ -513,18 +490,11 @@ export function Predict() {
             </div>
           ) : (
             <div className="space-y-3">
-              {(() => {
-                // Show the matched book's real cover, or a gradient tile with the
-                // *typed* title when the book isn't in the dataset — never a
-                // different book's cover.
-                const cover: CoverBook =
-                  coverBook ?? { title: form.title || "Your book", isbn: null, isbn13: null };
-                return (
-                  <div className="animate-float">
-                    <CoverCard key={cover.isbn13 || cover.isbn || cover.title} book={cover} />
-                  </div>
-                );
-              })()}
+              {coverBook && (
+                <div className="animate-float">
+                  <CoverCard key={coverBook.isbn13 || coverBook.isbn || coverBook.title} book={coverBook} />
+                </div>
+              )}
               <div className="flex items-center justify-center gap-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
                 Predicted rating {loading && <span className="h-2 w-2 animate-ping rounded-full bg-forest-400" />}
               </div>
