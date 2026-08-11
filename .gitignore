@@ -19,6 +19,7 @@ ENV/
 .ipynb_checkpoints/
 notebooks/examples/
 notebooks/bkups/
+notebooks/archives/
 # --- Environment & secrets  ---
 .env
 .env.*
@@ -58,10 +59,14 @@ wandb/
 
 # --- documents ---
 docs/other/
-
-logs/
 docs/plans/
+docs/archives/
+logs/
+
+
+#--- Data ---
 data/external/
+data/processed/archives/
 data/processed/goodreads_extended_cleaned.db
 data/processed/goodreads_extended_cleaned.db-*
 data/processed/goodreads_extended_cleaned.tmp.db
