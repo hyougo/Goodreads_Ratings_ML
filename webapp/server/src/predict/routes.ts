@@ -19,12 +19,15 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * deadline) so the user just waits a little instead of seeing that raw HTML.
  */
 async function callMlService(path: string, payload: unknown): Promise<Response | null> {
-  const deadline = Date.now() + 55_000; // total budget to wait out a cold start
+  // Keep the server response snappy — the client retries on its side while the
+  // free-tier ML service finishes waking up, so we don't hold the request open
+  // for a full minute here.
+  const deadline = Date.now() + 12_000;
   let firstTry = true;
   while (firstTry || Date.now() < deadline) {
     firstTry = false;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000); // per-attempt cap
+    const timer = setTimeout(() => controller.abort(), 9_000); // per-attempt cap
     try {
       const response = await fetch(`${config.mlServiceUrl}${path}`, {
         method: "POST",

@@ -200,20 +200,48 @@ export function Predict() {
     const requestId = ++predictionRequest.current;
     setLoading(true);
     setError(null);
-    api
-      .predict(f)
-      .then((res) => {
-        if (predictionRequest.current === requestId) setResult(res.predictedRating);
-      })
-      .catch((err) => {
-        if (predictionRequest.current === requestId) {
-          setError(err instanceof Error ? err.message : "Prediction failed");
-        }
-      })
-      .finally(() => {
-        if (predictionRequest.current === requestId) setLoading(false);
-      });
+
+    // The ML service runs on free hosting and can take up to a minute to wake
+    // from sleep. Retry automatically so the rating appears on its own instead
+    // of leaving the user staring at an error.
+    const isTransient = (msg: string) =>
+      /waking up|failed to fetch|unavailable|network|load failed|timeout|50[234]/i.test(msg);
+
+    const attempt = (n: number) => {
+      if (predictionRequest.current !== requestId) return; // superseded by a newer edit
+      api
+        .predict(f)
+        .then((res) => {
+          if (predictionRequest.current !== requestId) return;
+          setResult(res.predictedRating);
+          setError(null);
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (predictionRequest.current !== requestId) return;
+          const msg = err instanceof Error ? err.message : "Prediction failed";
+          if (isTransient(msg) && n < 20) {
+            setError(null); // keep the calm "waking up" panel, not a red error
+            window.setTimeout(() => attempt(n + 1), 4000);
+          } else {
+            setError(msg);
+            setLoading(false);
+          }
+        });
+    };
+    attempt(0);
   }, []);
+
+  // After a couple of seconds of loading, show a "waking up" hint (cold start).
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) {
+      setSlow(false);
+      return;
+    }
+    const t = window.setTimeout(() => setSlow(true), 2500);
+    return () => window.clearTimeout(t);
+  }, [loading]);
 
   // Live prediction: re-run (debounced) whenever any input changes.
   useEffect(() => {
@@ -482,12 +510,28 @@ export function Predict() {
         {/* result gauge */}
         <div className="card flex flex-col items-center justify-center gap-4 p-8 text-center lg:sticky lg:top-24 lg:self-start">
           {result === null ? (
-            <div className="flex flex-col items-center text-stone-400">
-              <span className="animate-float mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-parchment-100 text-forest-400">
-                <Icon name="gauge" size={30} />
-              </span>
-              <p className="text-sm">Add a title & author to see a live prediction.</p>
-            </div>
+            loading ? (
+              <div className="flex flex-col items-center">
+                <span className="mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-parchment-100">
+                  <span className="h-7 w-7 animate-spin rounded-full border-2 border-forest-200 border-t-forest-500" />
+                </span>
+                <p className="text-sm font-medium text-forest-600">
+                  {slow ? "Waking up the rating model…" : "Estimating rating…"}
+                </p>
+                {slow && (
+                  <p className="mt-1 max-w-[15rem] text-xs text-stone-400">
+                    Free hosting — the first prediction can take up to a minute.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center text-stone-400">
+                <span className="animate-float mb-3 grid h-16 w-16 place-items-center rounded-2xl bg-parchment-100 text-forest-400">
+                  <Icon name="gauge" size={30} />
+                </span>
+                <p className="text-sm">Add a title & author to see a live prediction.</p>
+              </div>
+            )
           ) : (
             <div className="space-y-3">
               {coverBook && (
@@ -575,8 +619,25 @@ function BatchPredict({ onPickRow }: { onPickRow: (row: BatchPredictionRow) => v
       const parsed = parseCsv(text).map(rowToInput);
       if (!parsed.length) throw new Error("No rows found in the file.");
       if (parsed.length > 2000) throw new Error(`Too many rows (${parsed.length}). Max is 2000.`);
-      const res = await api.predictBatch(parsed);
-      setRows(res.predictions);
+      // Retry while the free-tier ML service wakes up, like the live predictor.
+      const isTransient = (m: string) =>
+        /waking up|failed to fetch|unavailable|network|load failed|timeout|50[234]/i.test(m);
+      let res: Awaited<ReturnType<typeof api.predictBatch>> | null = null;
+      for (let n = 0; n < 20; n++) {
+        try {
+          res = await api.predictBatch(parsed);
+          break;
+        } catch (err) {
+          const m = err instanceof Error ? err.message : "";
+          if (!isTransient(m) || n === 19) throw err;
+          setError("Waking up the rating model… retrying automatically.");
+          await new Promise((r) => setTimeout(r, 4000));
+        }
+      }
+      if (res) {
+        setError(null);
+        setRows(res.predictions);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Batch prediction failed.");
     } finally {
