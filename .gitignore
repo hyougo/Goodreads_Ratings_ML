@@ -40,6 +40,7 @@ Thumbs.db
 *.swo
 .idea/
 .vscode/
+AGENTS.md
 
 # --- ML / notebooks outputs ---
 *.pkl
@@ -53,9 +54,6 @@ checkpoints/
 mlruns/
 wandb/
 
-# --- Data  ---
-#data/raw/
-#data/processed/
 
 # --- documents ---
 docs/other/
@@ -75,3 +73,6 @@ data/processed/goodreads_extended_cleaned.tmp.db-*
 #----Anaconda-----
 .virtual_documents/
 anaconda_projects/
+
+tmp/
+output/
