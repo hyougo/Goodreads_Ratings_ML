@@ -220,11 +220,15 @@ export function Predict() {
         .catch((err) => {
           if (predictionRequest.current !== requestId) return;
           const msg = err instanceof Error ? err.message : "Prediction failed";
-          if (isTransient(msg) && n < 20) {
+          if (isTransient(msg) && n < 6) {
             setError(null); // keep the calm "waking up" panel, not a red error
             window.setTimeout(() => attempt(n + 1), 4000);
           } else {
-            setError(msg);
+            setError(
+              isTransient(msg)
+                ? "The rating model isn't responding. It may be down — please try again in a minute."
+                : msg,
+            );
             setLoading(false);
           }
         });
@@ -623,13 +627,13 @@ function BatchPredict({ onPickRow }: { onPickRow: (row: BatchPredictionRow) => v
       const isTransient = (m: string) =>
         /waking up|failed to fetch|unavailable|network|load failed|timeout|50[234]/i.test(m);
       let res: Awaited<ReturnType<typeof api.predictBatch>> | null = null;
-      for (let n = 0; n < 20; n++) {
+      for (let n = 0; n < 6; n++) {
         try {
           res = await api.predictBatch(parsed);
           break;
         } catch (err) {
           const m = err instanceof Error ? err.message : "";
-          if (!isTransient(m) || n === 19) throw err;
+          if (!isTransient(m) || n === 5) throw err;
           setError("Waking up the rating model… retrying automatically.");
           await new Promise((r) => setTimeout(r, 4000));
         }
