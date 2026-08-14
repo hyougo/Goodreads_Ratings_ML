@@ -1,11 +1,14 @@
-
+# Render Blueprint — deploys the whole BookWise stack in one go.
+# On Render: New + > Blueprint > pick this repo. It creates the database and the
+# three services below. After the first deploy, fill the three URLs marked
+# "sync: false" (see the deploy notes in the chat), then redeploy.
 
 databases:
   - name: bookwise-db
     plan: free
 
 services:
-
+  # 1) Python ML microservice (FastAPI + XGBoost) --------------------------------
   - type: web
     name: bookwise-ml
     runtime: python
@@ -17,13 +20,13 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.4
 
-
+  # 2) Node API (Express + Prisma + Postgres) ------------------------------------
   - type: web
     name: bookwise-server
     runtime: node
     plan: free
     rootDir: webapp/server
-
+    # db push creates the tables, seed imports ~11k books (idempotent), then build.
     buildCommand: npm install && npx prisma generate && npx prisma db push && npm run seed && npm run build
     startCommand: node dist/index.js
     envVars:
@@ -37,13 +40,13 @@ services:
         generateValue: true
       - key: BOOKS_CSV
         value: ../../data/raw/books.csv
-
-      - key: ML_SERVICE_URL
+      # Paste these two after the first deploy, then redeploy this service:
+      - key: ML_SERVICE_URL   # = the bookwise-ml URL, e.g. https://bookwise-ml.onrender.com
         sync: false
-      - key: CLIENT_ORIGIN
+      - key: CLIENT_ORIGIN    # = the bookwise-client URL, e.g. https://bookwise-client.onrender.com
         sync: false
 
- 
+  # 3) React client (static site) ------------------------------------------------
   - type: web
     name: bookwise-client
     runtime: static
@@ -51,11 +54,11 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     routes:
-
+      # SPA fallback: any unknown path serves index.html (client-side routing)
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
-
-      - key: VITE_API_URL
+      # Paste the bookwise-server URL after its first deploy, then redeploy this site:
+      - key: VITE_API_URL     # = the bookwise-server URL, e.g. https://bookwise-server.onrender.com
         sync: false
